@@ -6,6 +6,7 @@ Uses **hybrid retrieval** (vector search + BM25 keyword search) with Reciprocal 
 ## Features
 
 - **Hybrid Search** — combines semantic vector search (ChromaDB) with keyword search (BM25) using Reciprocal Rank Fusion (RRF) for superior retrieval accuracy
+- **Document Summarization** — extractive summarization of any indexed document using TF-based sentence scoring with positional boosting
 - **Query Rewriting** — synonym expansion and coreference resolution using conversation history
 - **Chat Memory** — server-side session management with conversation context carryover
 - **Heuristic Reranker** — re-scores retrieval results for multi-document reasoning
@@ -16,108 +17,92 @@ Uses **hybrid retrieval** (vector search + BM25 keyword search) with Reciprocal 
 - **File Upload** — ingest `.txt`, `.md`, `.pdf` files directly from the UI (max 10 MB)
 - **Mobile-first Frontend** — dark purple UI served at `/app`
 
-## Architecture
+## Quick Start (Clone & Run)
 
-```
-User Question
-    │
-    ▼
-Query Rewriter (synonym expansion + coreference resolution)
-    │
-    ▼
-┌───────────────────┐     ┌──────────────────┐
-│ Vector Search     │     │ BM25 Keyword     │
-│ (ChromaDB cosine) │     │ Search (in-mem)  │
-└───────────────────┘     └──────────────────┘
-         \                      /
-          ▼                    ▼
-     Reciprocal Rank Fusion (RRF)
-              │
-              ▼
-       Heuristic Reranker
-              │
-              ▼
-     Grounding Check (keyword overlap + min score)
-              │
-              ▼
-     Rule-based Answer Generator
-              │
-              ▼
-     Response: answer + sources + confidence
+### Prerequisites
+
+- **Python 3.10+** (tested with 3.12)
+- **pip** (Python package manager)
+- **Git**
+- ~2 GB disk space (for dependencies + embeddings model + document index)
+
+### Step 1: Clone the Repository
+
+```bash
+git clone https://github.com/thiru0-0/Insight-RAG.git
+cd Insight-RAG
 ```
 
-## Tech Stack
+### Step 2: Create a Virtual Environment
 
-| Component | Technology |
-|---|---|
-| Backend | FastAPI (Python) |
-| Vector store | ChromaDB (persistent, cosine metric) |
-| Embeddings | sentence-transformers (`all-MiniLM-L6-v2`) |
-| Keyword search | BM25Okapi (`rank_bm25`) |
-| Fusion | Reciprocal Rank Fusion (k=60) |
-| Generator | Local rule-based extractor (no paid API) |
-| Document parser | PyPDF2 + text readers |
-| Frontend | Vanilla HTML/CSS/JS (mobile-first) |
+```bash
+# Linux / macOS
+python3 -m venv .venv
+source .venv/bin/activate
 
-## Project Structure
+# Windows (PowerShell)
+python -m venv .venv
+.venv\Scripts\Activate.ps1
 
-```
-Insight-RAG/
-  docs/                        # Indexed documents (1,301 .txt files)
-  data/chroma_db/              # Persistent ChromaDB (67,934 chunks)
-  src/
-    main.py                    # FastAPI app, routes, lifespan init
-    hybrid_search.py           # BM25Index, HybridRetriever, RRF fusion
-    query_engine.py            # ChatMemory, query rewriting, synonym expansion
-    retriever.py               # Retriever, Reranker classes
-    vector_store.py            # EmbeddingGenerator, VectorStore (ChromaDB)
-    llm_generator.py           # Rule-based grounded answer generator
-    ingest.py                  # DocumentLoader, TextChunker
-    dataset_loader.py          # Wikipedia/CUAD dataset loading
-    static/index.html          # Dark purple frontend UI
-  tests/
-    conftest.py                # Shared pytest fixtures
-    test_hybrid_search.py      # BM25, RRF, normalization tests (14 tests)
-    test_query_engine.py       # Synonym, coreference, memory tests (25 tests)
-    test_api.py                # API endpoint integration tests (17 tests)
-  load_datasets.py             # Dataset load + index helper
-  run_pipeline.py              # Dataset loading entry point
-  test_frontend_backend_flow.py  # Integration smoke test
-  requirements.txt
-  .env.example
-  frontend-design.md           # UI design methodology (DFII scoring)
+# Windows (CMD)
+python -m venv .venv
+.venv\Scripts\activate.bat
 ```
 
-## Setup
+### Step 3: Install Dependencies
 
 ```bash
 pip install -r requirements.txt
-python load_datasets.py
 ```
 
-`load_datasets.py` will:
-1. Load available dataset content (Wikipedia 2020/2023, CUAD contracts)
-2. Save docs into `docs/`
-3. Chunk, embed, and index into ChromaDB
+This installs FastAPI, ChromaDB, sentence-transformers, PyTorch, rank_bm25, and all other dependencies.
 
-If the collection is empty at server startup, it auto-bootstraps from `docs/`.
+### Step 4: Configure Environment (Optional)
 
-## Run the Server
+```bash
+# Copy the example config
+cp .env.example .env
+
+# Edit .env if you want to change defaults (port, chunk size, etc.)
+```
+
+Default settings work out of the box — no API keys required.
+
+### Step 5: Start the Server
 
 ```bash
 python src/main.py
 ```
 
-Or with a custom port:
+On first startup, the system will:
+1. Download the `all-MiniLM-L6-v2` embedding model (~90 MB, one-time download)
+2. Auto-bootstrap from the `docs/` folder — chunk and embed all 1,301 documents (~67,934 chunks)
+3. Build the BM25 keyword index in memory
+
+> **Note:** First startup takes 5-15 minutes depending on hardware (embedding 67K chunks). Subsequent startups load from the persisted ChromaDB and take ~30 seconds.
+
+### Step 6: Open the App
+
+Once you see `Uvicorn running on http://0.0.0.0:8000`, open your browser:
+
+| URL | Description |
+|---|---|
+| [http://localhost:8000/app](http://localhost:8000/app) | Frontend UI (dark purple interface) |
+| [http://localhost:8000/docs](http://localhost:8000/docs) | Swagger API documentation |
+| [http://localhost:8000/health](http://localhost:8000/health) | Health check endpoint |
+
+### Custom Port
 
 ```bash
-set API_PORT=8012 && python src/main.py
-```
+# Linux / macOS
+API_PORT=8012 python src/main.py
 
-Then open:
-- **Frontend UI:** `http://127.0.0.1:8000/app`
-- **Swagger docs:** `http://127.0.0.1:8000/docs`
-- **Health check:** `http://127.0.0.1:8000/health`
+# Windows CMD
+set API_PORT=8012 && python src/main.py
+
+# Windows PowerShell
+$env:API_PORT="8012"; python src/main.py
+```
 
 ## Run Tests
 
@@ -133,10 +118,79 @@ pytest tests/ -v
 | `test_query_engine.py` | 25 | Pronouns, coreference, synonyms, ChatMemory sessions |
 | `test_api.py` | 17 | Health, frontend, ingest, query, sessions, clear |
 
-Or run the integration smoke test directly:
+## Architecture
 
-```bash
-python test_frontend_backend_flow.py
+```
+User Question
+    |
+    v
+Query Rewriter (synonym expansion + coreference resolution)
+    |
+    v
++-------------------+     +------------------+
+| Vector Search     |     | BM25 Keyword     |
+| (ChromaDB cosine) |     | Search (in-mem)  |
++-------------------+     +------------------+
+         \                      /
+          v                    v
+     Reciprocal Rank Fusion (RRF)
+              |
+              v
+       Heuristic Reranker
+              |
+              v
+     Grounding Check (keyword overlap + min score)
+              |
+              v
+     Rule-based Answer Generator
+              |
+              v
+     Response: answer + sources + confidence
+```
+
+## Tech Stack
+
+| Component | Technology |
+|---|---|
+| Backend | FastAPI (Python) |
+| Vector store | ChromaDB (persistent, cosine metric) |
+| Embeddings | sentence-transformers (`all-MiniLM-L6-v2`) |
+| Keyword search | BM25Okapi (`rank_bm25`) |
+| Fusion | Reciprocal Rank Fusion (k=60) |
+| Generator | Local rule-based extractor (no paid API) |
+| Summarizer | Extractive TF + positional scoring |
+| Document parser | PyPDF2 + text readers |
+| Frontend | Vanilla HTML/CSS/JS (mobile-first) |
+
+## Project Structure
+
+```
+Insight-RAG/
+  project_docs/                  # Hackathon submission materials (PPT, diagrams)
+  docs/                          # Indexed documents (1,301 .txt files)
+  data/chroma_db/                # Persistent ChromaDB (67,934 chunks) [auto-created]
+  src/
+    main.py                      # FastAPI app, routes, lifespan init
+    hybrid_search.py             # BM25Index, HybridRetriever, RRF fusion
+    query_engine.py              # ChatMemory, query rewriting, synonym expansion
+    retriever.py                 # Retriever, Reranker classes
+    vector_store.py              # EmbeddingGenerator, VectorStore (ChromaDB)
+    llm_generator.py             # Rule-based grounded answer generator
+    ingest.py                    # DocumentLoader, TextChunker
+    dataset_loader.py            # Wikipedia/CUAD dataset loading
+    static/index.html            # Dark purple frontend UI
+  tests/
+    conftest.py                  # Shared pytest fixtures
+    test_hybrid_search.py        # BM25, RRF, normalization tests (14 tests)
+    test_query_engine.py         # Synonym, coreference, memory tests (25 tests)
+    test_api.py                  # API endpoint integration tests (17 tests)
+  load_datasets.py               # Dataset load + index helper
+  run_pipeline.py                # Dataset loading entry point
+  requirements.txt               # Python dependencies
+  .env.example                   # Environment variable template
+  Dockerfile                     # Docker build for deployment
+  render.yaml                    # Render.com deployment blueprint
+  frontend-design.md             # UI design methodology (DFII scoring)
 ```
 
 ## API Endpoints
@@ -185,15 +239,35 @@ python test_frontend_backend_flow.py
   "confidence": "high",
   "query": "What is the termination notice period?",
   "session_id": "a1b2c3d4e5f6",
-  "query_rewrite": {
-    "original": "What is the termination notice period?",
-    "rewritten": "What is the termination notice period? terminate end",
-    "display_query": "What is the termination notice period?",
-    "expanded_terms": ["terminate", "end"],
-    "was_rewritten": true,
-    "reason": "Expanded with synonym terms"
-  },
   "retrieval_method": "hybrid"
+}
+```
+
+### Summarization
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/documents` | List all unique document filenames in the vector store |
+| `POST` | `/summarize` | Generate an extractive summary of a specific document |
+
+**Request:**
+
+```json
+{
+  "filename": "wiki2020_artificial_intelligence.txt",
+  "max_sentences": 7
+}
+```
+
+**Response:**
+
+```json
+{
+  "filename": "wiki2020_artificial_intelligence.txt",
+  "summary": "Artificial Intelligence (AI) is intelligence demonstrated by machines...",
+  "total_chunks": 12,
+  "total_sentences": 45,
+  "sentences_selected": 7
 }
 ```
 
@@ -213,6 +287,21 @@ python test_frontend_backend_flow.py
 | `GET` | `/session/{id}/history` | Get conversation history for a session |
 | `DELETE` | `/session/{id}` | Delete a chat session |
 
+## Environment Variables
+
+All variables are optional — defaults work out of the box:
+
+| Variable | Default | Description |
+|---|---|---|
+| `EMBEDDING_MODEL` | `all-MiniLM-L6-v2` | Sentence-transformer model name |
+| `CHROMA_PERSIST_DIRECTORY` | `./data/chroma_db` | ChromaDB storage path |
+| `CHUNK_SIZE` | `500` | Characters per chunk |
+| `CHUNK_OVERLAP` | `50` | Overlap between chunks |
+| `TOP_K` | `5` | Default number of retrieval results |
+| `MIN_RELEVANCE_SCORE` | `0.30` | Minimum score for grounding check |
+| `API_HOST` | `0.0.0.0` | Server bind address |
+| `API_PORT` | `8000` | Server port |
+
 ## Key Design Decisions
 
 - **No paid API keys** — the generator is rule-based (extracts relevant sentences from retrieved context). No OpenAI/Anthropic dependency.
@@ -220,11 +309,22 @@ python test_frontend_backend_flow.py
 - **Min-max score normalization** — BM25-only results get display scores in [0.20, 0.95] via min-max normalization of RRF scores, preventing inflated 98-100% scores.
 - **Singleton reranker** — `Reranker` is instantiated once at startup, not per-request.
 - **Server-side sessions** — chat memory is stored server-side (10 turns/session, 1hr TTL, 200 max sessions) for coreference resolution.
-- **Grounding check** — queries are validated against retrieved content using keyword overlap and minimum relevance score (`MIN_RELEVANCE_SCORE=0.30`).
+- **Grounding check** — queries are validated against retrieved content using keyword overlap and minimum relevance score.
+- **Extractive summarization** — no LLM needed; uses TF-based sentence scoring with positional boosting and length normalization to select representative sentences.
+
+## Troubleshooting
+
+| Issue | Solution |
+|---|---|
+| `ModuleNotFoundError` | Make sure venv is activated and `pip install -r requirements.txt` was run |
+| First startup is slow | Normal — embedding 67K chunks takes 5-15 min. Subsequent starts use cached ChromaDB |
+| Port already in use | Use `API_PORT=8012 python src/main.py` to pick a different port |
+| `torch` install fails | Try `pip install torch --index-url https://download.pytorch.org/whl/cpu` for CPU-only |
+| Empty responses | Check `/health` endpoint; if `total_chunks: 0`, run `python load_datasets.py` |
 
 ## Hackathon Guideline Compliance
 
-- **Correctness & functionality (40%):** grounded retrieval + mandatory fallback + citations + confidence
+- **Correctness & functionality (40%):** grounded retrieval + mandatory fallback + citations + confidence + summarization
 - **AI/ML quality (30%):** embeddings + hybrid vector/BM25 search + RRF fusion + reranker + query rewriting
 - **API design & engineering (20%):** structured endpoints + validation + error handling + session management
 - **Documentation (10%):** this README + runnable commands + API examples + 59-test suite
@@ -235,3 +335,7 @@ python test_frontend_backend_flow.py
 - Graceful handling for empty/invalid input
 - If indexed content is empty at startup, app auto-bootstraps from `docs/`
 - All answers are strictly derived from retrieved document chunks
+
+## License
+
+Built for the AI & Programming Hackathon by THIRUMURUGESH J D.
