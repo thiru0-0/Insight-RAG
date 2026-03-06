@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: insight-rag
+    runtime: python
+    repo: https://github.com/thiru0-0/Insight-RAG
+    branch: master
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn src.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.0"
+    plan: free

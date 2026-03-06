@@ -18,8 +18,6 @@ env/
 # ChromaDB persistent storage
 data/
 
-# Dataset documents (regenerate via: python load_datasets.py)
-docs/
 
 # Logs
 *.log
