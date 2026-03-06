@@ -1016,6 +1016,47 @@
       font-size: 10px;
     }
 
+    /* ── Summary Result ── */
+    .summary-result {
+      margin-top: 20px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: var(--r-xl);
+      padding: 20px;
+      animation: fadeUp 250ms ease both;
+    }
+    .summary-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 14px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    .summary-title {
+      font-family: var(--mono);
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--purple-light);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 50%;
+    }
+    .summary-meta {
+      display: flex;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+    .summary-body {
+      font-size: 14px;
+      line-height: 1.80;
+      color: var(--text-sec);
+      white-space: pre-wrap;
+    }
+
     /* ── Responsive ── */
     @media (max-width: 760px) {
       :root { --sidebar-w: 52px; }
@@ -1067,6 +1108,10 @@
         <span class="ni-icon">◈</span>
         <span>Chat</span>
         <span class="ni-badge" id="msg-count" style="display:none;">0</span>
+      </div>
+      <div class="nav-item" data-panel="summarize">
+        <span class="ni-icon">≡</span>
+        <span>Summarize</span>
       </div>
 
       <div class="sidebar-section-label">Ingest</div>
@@ -1150,6 +1195,48 @@
 
       <!-- UPLOAD PANEL -->
       <section class="panel" id="panel-upload">
+
+      <!-- SUMMARIZE PANEL -->
+      <section class="panel" id="panel-summarize">
+        <div class="panel-header">
+          <span class="panel-title">Document Summarizer</span>
+          <span class="panel-sub">Generate extractive summaries from indexed documents</span>
+        </div>
+        <div class="panel-body">
+          <div class="form-group">
+            <label class="form-label" for="doc-select">Select Document</label>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <select id="doc-select" class="form-input" style="flex:1;">
+                <option value="">Loading documents...</option>
+              </select>
+              <button id="refresh-docs-btn" class="header-btn" type="button" title="Refresh document list" style="flex-shrink:0;">Refresh</button>
+            </div>
+            <div class="form-hint">Choose a document from the vector store to summarize</div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="summary-sentences">Summary Length</label>
+            <select id="summary-sentences" class="form-input" style="max-width:180px;">
+              <option value="3">Short (3 sentences)</option>
+              <option value="5">Medium (5 sentences)</option>
+              <option value="7" selected>Standard (7 sentences)</option>
+              <option value="10">Long (10 sentences)</option>
+              <option value="15">Detailed (15 sentences)</option>
+            </select>
+          </div>
+          <button id="summarize-btn" class="btn btn-primary" type="button">Summarize</button>
+
+          <div id="summary-result" class="summary-result" style="display:none;">
+            <div class="summary-header">
+              <span class="summary-title" id="summary-doc-name">—</span>
+              <div class="summary-meta">
+                <span class="chip" id="summary-chunks">— chunks</span>
+                <span class="chip" id="summary-sents">— sentences selected</span>
+              </div>
+            </div>
+            <div class="summary-body" id="summary-body">—</div>
+          </div>
+        </div>
+      </section>
         <div class="panel-header">
           <span class="panel-title">Upload Document</span>
           <span class="panel-sub">Add files to the knowledge base</span>
@@ -1342,6 +1429,7 @@
       const nav = el.navItems.find(n => n.dataset.panel === id);
       if (nav) nav.classList.add("active");
       if (id === "stats") loadStats();
+      if (id === "summarize") loadDocumentList();
     }
 
     function autoResize() {
@@ -1805,6 +1893,70 @@
     }
 
     /* ═══════════════════════════════
+       SUMMARIZE
+    ═══════════════════════════════ */
+    async function loadDocumentList() {
+      const sel = document.getElementById("doc-select");
+      try {
+        const res = await fetch("/documents");
+        if (!res.ok) throw new Error();
+        const data = await res.json();
+        const docs = data.documents || [];
+        sel.innerHTML = "";
+        if (!docs.length) {
+          sel.innerHTML = `<option value="">No documents found</option>`;
+          return;
+        }
+        sel.innerHTML = `<option value="">-- Select a document --</option>` +
+          docs.map(d => `<option value="${escHtml(d)}">${escHtml(d)}</option>`).join("");
+      } catch (_) {
+        sel.innerHTML = `<option value="">Failed to load documents</option>`;
+      }
+    }
+
+    async function summarizeDocument() {
+      const sel = document.getElementById("doc-select");
+      const filename = sel.value;
+      if (!filename) { showToast("Select a document first", "error"); return; }
+
+      const btn = document.getElementById("summarize-btn");
+      const resultDiv = document.getElementById("summary-result");
+      const maxSents = Number(document.getElementById("summary-sentences").value) || 7;
+
+      btn.disabled = true;
+      const prevText = btn.textContent;
+      btn.textContent = "Summarizing...";
+      resultDiv.style.display = "none";
+
+      try {
+        const res = await fetch("/summarize", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ filename, max_sentences: maxSents }),
+        });
+        const text = await res.text();
+        if (!res.ok) {
+          let d = "Summarization failed";
+          try { d = JSON.parse(text).detail || d; } catch (_) {}
+          showToast(d, "error");
+          return;
+        }
+        const data = JSON.parse(text);
+        document.getElementById("summary-doc-name").textContent = data.filename || filename;
+        document.getElementById("summary-chunks").textContent = (data.total_chunks || 0) + " chunks";
+        document.getElementById("summary-sents").textContent = (data.sentences_selected || 0) + " of " + (data.total_sentences || 0) + " sentences";
+        document.getElementById("summary-body").textContent = data.summary || "No summary generated.";
+        resultDiv.style.display = "block";
+        showToast("Summary generated", "success");
+      } catch (e) {
+        showToast(e.message || "Network error", "error");
+      } finally {
+        btn.disabled = false;
+        btn.textContent = prevText;
+      }
+    }
+
+    /* ═══════════════════════════════
        EVENT WIRING
     ═══════════════════════════════ */
     el.navItems.forEach(n => n.addEventListener("click", () => switchPanel(n.dataset.panel)));
@@ -1830,6 +1982,10 @@
     el.modalCancel.addEventListener("click", closeClearModal);
     el.modalConfirm.addEventListener("click", clearStore);
     el.clearModal.addEventListener("click", e => { if (e.target === el.clearModal) closeClearModal(); });
+
+    // Summarize panel events
+    document.getElementById("summarize-btn").addEventListener("click", summarizeDocument);
+    document.getElementById("refresh-docs-btn").addEventListener("click", () => { loadDocumentList(); showToast("Document list refreshed", "success"); });
 
     /* ═══════════════════════════════
        INIT

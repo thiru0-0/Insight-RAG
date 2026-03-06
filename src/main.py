@@ -65,6 +65,11 @@ class QueryRequest(BaseModel):
     session_id: Optional[str] = Field(default=None, description="Chat session ID for conversation memory")
 
 
+class SummarizeRequest(BaseModel):
+    filename: str = Field(..., min_length=1, description="Document filename to summarize")
+    max_sentences: Optional[int] = Field(default=7, ge=3, le=20, description="Max sentences in summary")
+
+
 class QueryResponse(BaseModel):
     answer: str
     sources: List[dict]
@@ -264,6 +269,8 @@ async def root():
         "endpoints": {
             "health": "/health",
             "query": "/query (POST)",
+            "summarize": "/summarize (POST)",
+            "documents": "/documents (GET)",
             "ingest": "/ingest (POST)",
             "stats": "/stats (GET)"
         }
@@ -549,6 +556,163 @@ async def clear_vector_store():
         return {"status": "success", "message": "Vector store and BM25 index cleared"}
     except Exception as e:
         logger.error(f"Error clearing vector store: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/documents", tags=["Documents"])
+async def list_documents():
+    """List all unique document filenames in the vector store."""
+    try:
+        ensure_system_ready()
+        # Fetch all metadatas from the collection
+        result = vector_store.collection.get(include=["metadatas"])
+        filenames = set()
+        for meta in (result.get("metadatas") or []):
+            fn = (meta or {}).get("filename", "")
+            if fn:
+                filenames.add(fn)
+        sorted_names = sorted(filenames)
+        return {"documents": sorted_names, "count": len(sorted_names)}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error listing documents: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/summarize", tags=["Query"])
+async def summarize_document(request: SummarizeRequest):
+    """
+    Generate an extractive summary of a specific document.
+    Retrieves all chunks for the document from ChromaDB and selects
+    the most representative sentences using a TextRank-inspired approach.
+    """
+    import re
+    import math
+
+    try:
+        ensure_system_ready()
+
+        filename = request.filename.strip()
+        max_sentences = request.max_sentences or 7
+
+        # ── Retrieve all chunks for this document from ChromaDB ─────
+        result = vector_store.collection.get(
+            where={"filename": filename},
+            include=["documents", "metadatas"],
+        )
+
+        docs = result.get("documents") or []
+        if not docs:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No chunks found for document: {filename}",
+            )
+
+        # ── Re-assemble document text in chunk_index order ──────────
+        metas = result.get("metadatas") or []
+        paired = list(zip(docs, metas))
+        paired.sort(key=lambda x: int(x[1].get("chunk_index", 0) or 0))
+        full_text = "\n".join(chunk_text for chunk_text, _ in paired)
+
+        # ── Split into sentences ────────────────────────────────────
+        raw_sentences = re.split(r'(?<=[.!?])\s+', full_text)
+        sentences = [s.strip() for s in raw_sentences if len(s.strip()) > 20]
+
+        if not sentences:
+            return {
+                "filename": filename,
+                "summary": full_text[:500],
+                "total_chunks": len(docs),
+                "total_sentences": 0,
+                "sentences_selected": 0,
+            }
+
+        # ── Tokenise helper ─────────────────────────────────────────
+        STOP = {
+            "the", "and", "for", "are", "but", "not", "you", "all", "any",
+            "can", "had", "her", "was", "one", "our", "out", "day", "get",
+            "has", "him", "his", "how", "its", "new", "now", "old", "see",
+            "two", "way", "who", "did", "she", "too", "use", "that", "this",
+            "with", "they", "have", "from", "been", "were", "said", "each",
+            "which", "their", "when", "will", "more", "than", "also", "into",
+            "some", "what", "there", "about", "would", "could", "should",
+            "these", "those", "such", "other", "been", "being", "very",
+            "just", "only", "then", "much", "both", "them", "same",
+        }
+
+        def tokenise(text):
+            words = re.findall(r'\b[a-z]{3,}\b', text.lower())
+            return [w for w in words if w not in STOP]
+
+        # ── Build word frequency table (TF) ─────────────────────────
+        word_freq = {}
+        for sent in sentences:
+            for w in tokenise(sent):
+                word_freq[w] = word_freq.get(w, 0) + 1
+
+        if not word_freq:
+            # No meaningful words — just return first few sentences
+            selected = sentences[:max_sentences]
+            return {
+                "filename": filename,
+                "summary": " ".join(selected),
+                "total_chunks": len(docs),
+                "total_sentences": len(sentences),
+                "sentences_selected": len(selected),
+            }
+
+        max_freq = max(word_freq.values())
+        for w in word_freq:
+            word_freq[w] /= max_freq  # normalise to [0, 1]
+
+        # ── Score each sentence ─────────────────────────────────────
+        scored = []
+        for idx, sent in enumerate(sentences):
+            tokens = tokenise(sent)
+            if not tokens:
+                scored.append((idx, sent, 0.0))
+                continue
+            tf_score = sum(word_freq.get(w, 0) for w in tokens) / len(tokens)
+
+            # Positional boost: first & last sentences are more important
+            position_boost = 0.0
+            if idx < 3:
+                position_boost = 0.15 * (3 - idx) / 3
+            elif idx >= len(sentences) - 2:
+                position_boost = 0.05
+
+            # Length normalisation: prefer medium-length sentences
+            length_penalty = 0.0
+            if len(tokens) < 5:
+                length_penalty = -0.1
+            elif len(tokens) > 40:
+                length_penalty = -0.05
+
+            final_score = tf_score + position_boost + length_penalty
+            scored.append((idx, sent, final_score))
+
+        # ── Select top sentences, then re-order by position ─────────
+        scored.sort(key=lambda x: x[2], reverse=True)
+        selected_indices = sorted([s[0] for s in scored[:max_sentences]])
+        summary_sentences = [sentences[i] for i in selected_indices]
+        summary = " ".join(summary_sentences)
+
+        # Clean up
+        summary = re.sub(r'\s+', ' ', summary).strip()
+
+        return {
+            "filename": filename,
+            "summary": summary,
+            "total_chunks": len(docs),
+            "total_sentences": len(sentences),
+            "sentences_selected": len(summary_sentences),
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error summarizing document: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
