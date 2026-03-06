@@ -1,0 +1,15 @@
+# Insight-RAG — Hybrid RAG Document Q&A
+fastapi>=0.109.0
+uvicorn>=0.27.0
+python-multipart>=0.0.6
+python-dotenv>=1.0.0
+pydantic>=2.5.3
+PyPDF2>=3.0.1
+chromadb>=0.4.22
+sentence-transformers>=2.3.1
+numpy>=1.26.3
+transformers>=4.36.0
+torch>=2.1.0
+datasets>=2.14.6
+accelerate>=0.25.0
+rank_bm25>=0.2.2

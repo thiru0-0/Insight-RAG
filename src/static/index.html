@@ -1,0 +1,1844 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Insight-RAG — Document Intelligence</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      /* ── Base surfaces ── */
+      --bg-base:      #0D0D0F;
+      --bg-surface:   #131316;
+      --bg-elevated:  #1C1C21;
+      --bg-hover:     #222228;
+      --bg-active:    #28282F;
+
+      /* ── Borders ── */
+      --border:       #2A2A32;
+      --border-hi:    #3D3D4A;
+
+      /* ── Purple accent ── */
+      --purple-deep:  #5B21B6;
+      --purple:       #7C3AED;
+      --purple-mid:   #9D4EDD;
+      --purple-light: #C084FC;
+      --purple-glow:  rgba(124,58,237,0.35);
+      --purple-tint:  rgba(124,58,237,0.12);
+      --purple-btn:   linear-gradient(135deg, #7C3AED, #9D4EDD);
+
+      /* ── Text ── */
+      --text:         #F4F4F5;
+      --text-sec:     #A1A1AA;
+      --text-muted:   #71717A;
+      --text-faint:   #3F3F46;
+
+      /* ── Status ── */
+      --ok:           #34D399;
+      --warn:         #FBBF24;
+      --danger:       #F87171;
+
+      /* ── Radius ── */
+      --r-sm:  8px;
+      --r:     12px;
+      --r-lg:  16px;
+      --r-xl:  20px;
+      --r-pill: 999px;
+
+      /* ── Typography ── */
+      --sans: "Inter", system-ui, sans-serif;
+      --mono: "JetBrains Mono", monospace;
+
+      /* ── Layout ── */
+      --sidebar-w: 240px;
+      --topbar-h:  52px;
+    }
+
+    html, body { height: 100%; overflow: hidden; }
+
+    body {
+      font-family: var(--sans);
+      font-size: 14px;
+      color: var(--text);
+      background: var(--bg-base);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border-hi); border-radius: var(--r-pill); }
+    ::-webkit-scrollbar-thumb:hover { background: var(--text-faint); }
+
+    /* ════════════════════════════════
+       TOPBAR
+    ════════════════════════════════ */
+    .topbar {
+      height: var(--topbar-h);
+      display: flex;
+      align-items: center;
+      background: var(--bg-surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 16px 0 0;
+      position: relative;
+      z-index: 50;
+      gap: 0;
+    }
+
+    .logo-block {
+      width: var(--sidebar-w);
+      height: 100%;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 0 16px;
+      border-right: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .logo-orb {
+      width: 30px; height: 30px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 38% 35%,
+        #C084FC 0%, #7C3AED 45%, #3B0764 100%);
+      box-shadow: 0 0 18px rgba(124,58,237,0.55), 0 0 6px rgba(192,132,252,0.3);
+      flex-shrink: 0;
+    }
+
+    .logo-text {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text);
+      letter-spacing: -0.01em;
+    }
+
+    .topbar-center {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+    }
+
+    .topbar-crumb {
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+    .topbar-crumb strong { color: var(--text-sec); font-weight: 500; }
+
+    .topbar-right {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-left: auto;
+    }
+
+    .chip {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 500;
+      color: var(--text-muted);
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: var(--r-pill);
+      padding: 4px 10px;
+      letter-spacing: 0.02em;
+    }
+
+    .status-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--ok);
+      box-shadow: 0 0 6px var(--ok);
+    }
+    .status-dot.offline { background: var(--danger); box-shadow: 0 0 6px var(--danger); }
+
+    /* ════════════════════════════════
+       LAYOUT
+    ════════════════════════════════ */
+    .layout {
+      height: calc(100% - var(--topbar-h));
+      display: flex;
+    }
+
+    /* ════════════════════════════════
+       SIDEBAR
+    ════════════════════════════════ */
+    .sidebar {
+      width: var(--sidebar-w);
+      background: var(--bg-surface);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      overflow-y: auto;
+      padding: 12px 10px 16px;
+    }
+
+    .sidebar-new-chat {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      padding: 10px;
+      border-radius: var(--r);
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      color: var(--text-sec);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 150ms, border-color 150ms, color 150ms;
+      margin-bottom: 16px;
+      text-align: center;
+    }
+    .sidebar-new-chat:hover {
+      background: var(--bg-hover);
+      border-color: var(--border-hi);
+      color: var(--text);
+    }
+
+    .sidebar-section-label {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text-faint);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 10px 8px 6px;
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 10px;
+      border-radius: var(--r-sm);
+      cursor: pointer;
+      color: var(--text-sec);
+      font-size: 13px;
+      font-weight: 400;
+      transition: background 130ms, color 130ms;
+      user-select: none;
+      margin-bottom: 1px;
+    }
+    .nav-item:hover { background: var(--bg-elevated); color: var(--text); }
+    .nav-item.active {
+      background: var(--purple-tint);
+      color: var(--purple-light);
+      font-weight: 500;
+    }
+    .nav-item.active .ni-icon { color: var(--purple-light); }
+
+    .ni-icon {
+      font-size: 15px;
+      color: var(--text-muted);
+      width: 18px;
+      text-align: center;
+      flex-shrink: 0;
+      transition: color 130ms;
+    }
+
+    .ni-badge {
+      margin-left: auto;
+      background: var(--purple);
+      color: #fff;
+      font-family: var(--mono);
+      font-size: 9px;
+      font-weight: 500;
+      padding: 2px 6px;
+      border-radius: var(--r-pill);
+      min-width: 18px;
+      text-align: center;
+    }
+
+    .sidebar-footer {
+      margin-top: auto;
+      padding-top: 12px;
+      border-top: 1px solid var(--border);
+    }
+    .sf-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 5px 8px;
+    }
+    .sf-label { font-size: 11px; color: var(--text-muted); }
+    .sf-val {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--text-sec);
+      font-weight: 500;
+    }
+    .sf-val.accent { color: var(--purple-light); }
+
+    /* ════════════════════════════════
+       MAIN
+    ════════════════════════════════ */
+    .main { flex: 1; overflow: hidden; display: flex; flex-direction: column; min-width: 0; }
+
+    .panel { display: none; flex-direction: column; flex: 1; overflow: hidden; }
+    .panel.active { display: flex; }
+
+    /* ── Panel Header ── */
+    .panel-header {
+      padding: 14px 20px;
+      background: var(--bg-surface);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-shrink: 0;
+    }
+    .panel-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text);
+      letter-spacing: -0.01em;
+    }
+    .panel-sub {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    .panel-header-right { margin-left: auto; }
+
+    /* ════════════════════════════════
+       CHAT AREA
+    ════════════════════════════════ */
+    .chat-area {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    /* ── Empty State ── */
+    .empty-state {
+      margin: auto;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+      text-align: center;
+      max-width: 500px;
+      animation: fadeUp 350ms ease both;
+    }
+
+    .es-orb {
+      width: 72px; height: 72px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 38% 35%,
+        #C084FC 0%, #7C3AED 50%, #3B0764 100%);
+      box-shadow:
+        0 0 40px rgba(124,58,237,0.50),
+        0 0 80px rgba(124,58,237,0.20),
+        inset 0 -4px 16px rgba(192,132,252,0.20);
+      margin-bottom: 6px;
+      animation: float 5s ease-in-out infinite;
+    }
+
+    .es-title {
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--text);
+      letter-spacing: -0.02em;
+      line-height: 1.2;
+    }
+    .es-sub { font-size: 14px; color: var(--text-muted); line-height: 1.6; }
+
+    .es-examples {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      width: 100%;
+      margin-top: 8px;
+    }
+    .es-chip {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      padding: 11px 14px;
+      font-size: 13px;
+      color: var(--text-sec);
+      cursor: pointer;
+      transition: background 150ms, border-color 150ms, color 150ms;
+      text-align: left;
+      display: flex;
+      align-items: center;
+      gap: 9px;
+    }
+    .es-chip::before {
+      content: "✦";
+      font-size: 10px;
+      color: var(--purple-mid);
+      flex-shrink: 0;
+    }
+    .es-chip:hover {
+      background: var(--purple-tint);
+      border-color: rgba(124,58,237,0.4);
+      color: var(--text);
+    }
+
+    /* ════════════════════════════════
+       MESSAGES
+    ════════════════════════════════ */
+    .msg {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      animation: fadeUp 200ms ease both;
+    }
+    .msg.user { align-items: flex-end; }
+    .msg.bot  { align-items: flex-start; }
+
+    .msg-label {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text-muted);
+      letter-spacing: 0.04em;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      padding: 0 2px;
+    }
+    .msg-label::before {
+      content: "";
+      width: 5px; height: 5px;
+      border-radius: 50%;
+    }
+    .msg.user .msg-label::before { background: var(--purple-light); }
+    .msg.bot  .msg-label::before { background: var(--text-muted); }
+
+    .msg-bubble {
+      max-width: 80%;
+      font-size: 14px;
+      line-height: 1.70;
+      padding: 14px 18px;
+      border-radius: var(--r-lg);
+      border: 1px solid transparent;
+    }
+    .msg.user .msg-bubble {
+      background: linear-gradient(135deg,
+        rgba(124,58,237,0.22) 0%,
+        rgba(157,78,221,0.16) 100%);
+      border-color: rgba(124,58,237,0.38);
+      color: var(--text);
+    }
+    .msg.bot .msg-bubble {
+      background: var(--bg-elevated);
+      border-color: var(--border);
+      color: var(--text-sec);
+    }
+
+    /* ── Thinking dots ── */
+    .thinking {
+      display: flex; align-items: center; gap: 6px; padding: 4px 2px;
+    }
+    .thinking span {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--purple-mid);
+      animation: pulse-dot 1.3s ease-in-out infinite;
+    }
+    .thinking span:nth-child(2) { animation-delay: 0.16s; }
+    .thinking span:nth-child(3) { animation-delay: 0.32s; }
+
+    /* ════════════════════════════════
+       ANSWER CARD
+    ════════════════════════════════ */
+    .answer-card { display: flex; flex-direction: column; gap: 12px; }
+
+    .answer-primary {
+      font-size: 14px;
+      line-height: 1.75;
+      color: var(--text);
+    }
+
+    /* Accuracy */
+    .accuracy-block {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .accuracy-header {
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .accuracy-label {
+      font-size: 11px; font-weight: 500;
+      color: var(--text-muted); letter-spacing: 0.04em; text-transform: uppercase;
+    }
+    .accuracy-right { display: flex; align-items: center; gap: 7px; }
+    .conf-badge {
+      font-size: 10px; font-weight: 500;
+      padding: 2px 9px; border-radius: var(--r-pill);
+      border: 1px solid;
+      text-transform: uppercase; letter-spacing: 0.06em;
+    }
+    .conf-badge.high   { color: var(--ok);    border-color: rgba(52,211,153,0.4); background: rgba(52,211,153,0.1); }
+    .conf-badge.medium { color: var(--warn);  border-color: rgba(251,191,36,0.4); background: rgba(251,191,36,0.1); }
+    .conf-badge.low    { color: var(--danger); border-color: rgba(248,113,113,0.4); background: rgba(248,113,113,0.1); }
+    .accuracy-pct {
+      font-family: var(--mono); font-size: 18px; font-weight: 500;
+      color: var(--text); line-height: 1;
+    }
+    .accuracy-pct.high   { color: var(--ok); }
+    .accuracy-pct.medium { color: var(--warn); }
+    .accuracy-pct.low    { color: var(--danger); }
+    .accuracy-bar-track {
+      height: 4px; border-radius: var(--r-pill);
+      background: var(--bg-active); overflow: hidden;
+    }
+    .accuracy-bar-fill {
+      height: 100%; border-radius: var(--r-pill);
+      transition: width 700ms cubic-bezier(.4,0,.2,1);
+    }
+    .accuracy-bar-fill.high   { background: linear-gradient(90deg, #34D399, #6EE7B7); }
+    .accuracy-bar-fill.medium { background: linear-gradient(90deg, #FBBF24, #FCD34D); }
+    .accuracy-bar-fill.low    { background: linear-gradient(90deg, #F87171, #FCA5A5); }
+
+    /* Best source */
+    .best-source {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      padding: 12px 14px;
+      display: flex; flex-direction: column; gap: 7px;
+    }
+    .best-source-header {
+      display: flex; align-items: center; gap: 8px;
+    }
+    .best-source-tag {
+      font-size: 10px; font-weight: 500;
+      color: var(--purple-light);
+      background: var(--purple-tint);
+      border: 1px solid rgba(124,58,237,0.30);
+      border-radius: var(--r-pill);
+      padding: 2px 8px;
+      letter-spacing: 0.04em;
+      flex-shrink: 0;
+    }
+    .best-source-filename {
+      font-family: var(--mono); font-size: 12px; font-weight: 500;
+      color: var(--text-sec);
+      flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .best-source-pct {
+      font-family: var(--mono); font-size: 12px; font-weight: 500;
+      color: var(--purple-light); flex-shrink: 0;
+    }
+    .source-bar-track {
+      height: 3px; border-radius: var(--r-pill);
+      background: var(--bg-active); overflow: hidden;
+    }
+    .source-bar-fill {
+      height: 100%; border-radius: var(--r-pill);
+      background: linear-gradient(90deg, var(--purple), var(--purple-mid));
+      transition: width 600ms cubic-bezier(.4,0,.2,1);
+    }
+    .best-source-snippet {
+      font-size: 12px; color: var(--text-muted); line-height: 1.65;
+    }
+
+    /* Collapse blocks */
+    .collapse-block {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      overflow: hidden;
+    }
+    .collapse-summary {
+      display: flex; align-items: center; gap: 8px;
+      padding: 10px 14px;
+      cursor: pointer; list-style: none;
+      font-size: 12px; font-weight: 500;
+      color: var(--text-muted);
+      user-select: none;
+      transition: background 130ms, color 130ms;
+    }
+    .collapse-summary::-webkit-details-marker { display: none; }
+    .collapse-summary:hover { background: var(--bg-hover); color: var(--text-sec); }
+    .collapse-arrow { font-size: 10px; transition: transform 160ms; display: inline-block; }
+    details[open] > .collapse-summary .collapse-arrow { transform: rotate(90deg); }
+    .collapse-badge {
+      font-size: 10px; font-weight: 500;
+      padding: 2px 8px; border-radius: var(--r-pill); border: 1px solid;
+      margin-left: auto; letter-spacing: 0.04em;
+    }
+    .collapse-badge.grounded   { color: var(--ok);    border-color: rgba(52,211,153,0.4); background: rgba(52,211,153,0.08); }
+    .collapse-badge.partial    { color: var(--warn);  border-color: rgba(251,191,36,0.4);  background: rgba(251,191,36,0.08); }
+    .collapse-badge.ungrounded { color: var(--danger);border-color: rgba(248,113,113,0.4); background: rgba(248,113,113,0.08); }
+    .collapse-body {
+      padding: 0 14px 12px;
+      display: flex; flex-direction: column;
+      border-top: 1px solid var(--border);
+    }
+
+    /* Secondary source items */
+    .source-item {
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border);
+      display: flex; flex-direction: column; gap: 5px;
+    }
+    .source-item:last-child { border-bottom: none; }
+    .source-item-top { display: flex; align-items: center; gap: 8px; }
+    .source-filename {
+      font-family: var(--mono); font-size: 11px; font-weight: 500;
+      color: var(--text-sec); flex: 1;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .source-score-pct {
+      font-family: var(--mono); font-size: 11px;
+      color: var(--purple-mid); flex-shrink: 0;
+    }
+    .source-snippet {
+      font-size: 12px; color: var(--text-muted); line-height: 1.60;
+      display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+    }
+
+    /* Grounding rows */
+    .grounding-row {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 12px; padding: 10px 0;
+      border-bottom: 1px solid var(--border); align-items: start;
+    }
+    .grounding-row:last-child { border-bottom: none; }
+    .grounding-sentence { font-size: 12px; line-height: 1.60; color: var(--text-sec); }
+    .grounding-evidence {
+      font-size: 12px; line-height: 1.58; color: var(--text-muted);
+      padding: 6px 10px; border-radius: var(--r-sm);
+      background: var(--bg-active);
+      border-left: 2px solid var(--border-hi);
+    }
+    .grounding-evidence.matched {
+      border-left-color: var(--ok); color: var(--text-sec);
+      background: rgba(52,211,153,0.05);
+    }
+    .grounding-evidence.unmatched {
+      border-left-color: var(--danger);
+      background: rgba(248,113,113,0.05);
+      font-style: italic;
+    }
+    .grounding-evidence-src {
+      font-size: 10px; color: var(--text-muted); margin-top: 4px;
+      font-family: var(--mono);
+    }
+
+    /* No-match */
+    .no-match-card { display: flex; flex-direction: column; gap: 8px; }
+    .no-match-banner {
+      background: rgba(248,113,113,0.08);
+      border: 1px solid rgba(248,113,113,0.30);
+      border-radius: var(--r-sm);
+      color: var(--danger); font-size: 12px;
+      padding: 9px 12px; display: flex; align-items: center; gap: 6px;
+    }
+    .no-match-text { font-size: 13px; color: var(--text-muted); line-height: 1.70; }
+
+    /* ════════════════════════════════
+       INPUT AREA
+    ════════════════════════════════ */
+    .input-area {
+      padding: 12px 20px 16px;
+      background: var(--bg-surface);
+      border-top: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .input-shell {
+      display: flex;
+      align-items: flex-end;
+      gap: 8px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-hi);
+      border-radius: var(--r-lg);
+      padding: 6px 8px 6px 16px;
+      transition: border-color 200ms, box-shadow 200ms;
+    }
+    .input-shell:focus-within {
+      border-color: rgba(124,58,237,0.55);
+      box-shadow: 0 0 0 3px rgba(124,58,237,0.10);
+    }
+
+    .query-input {
+      flex: 1;
+      min-height: 40px;
+      max-height: 110px;
+      resize: none;
+      border: none;
+      background: transparent;
+      color: var(--text);
+      font: 400 14px/1.6 var(--sans);
+      outline: none;
+      padding: 8px 0;
+    }
+    .query-input::placeholder { color: var(--text-faint); }
+
+    .input-controls {
+      display: flex; align-items: center; gap: 6px; flex-shrink: 0; align-self: flex-end; padding-bottom: 4px;
+    }
+
+    .topk-select {
+      border: none; background: transparent;
+      color: var(--text-muted); font-family: var(--mono); font-size: 11px;
+      cursor: pointer; padding: 6px 4px; outline: none;
+    }
+    .topk-select option { background: var(--bg-elevated); color: var(--text); }
+
+    .ask-btn {
+      width: 34px; height: 34px; border-radius: 50%;
+      background: var(--purple-btn);
+      border: none; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 15px; color: #fff;
+      box-shadow: 0 0 14px rgba(124,58,237,0.45);
+      transition: box-shadow 160ms, transform 160ms, opacity 160ms;
+      flex-shrink: 0;
+    }
+    .ask-btn:hover:not(:disabled) {
+      box-shadow: 0 0 22px rgba(124,58,237,0.65);
+      transform: scale(1.06);
+    }
+    .ask-btn:disabled { opacity: 0.40; cursor: not-allowed; transform: none; }
+
+    .input-hint {
+      display: flex; align-items: center; gap: 12px;
+      padding: 6px 4px 0;
+      font-size: 11px; color: var(--text-faint);
+    }
+
+    /* ════════════════════════════════
+       PANEL BODY
+    ════════════════════════════════ */
+    .panel-body { flex: 1; overflow-y: auto; padding: 20px; }
+
+    /* Upload */
+    .upload-zone {
+      border: 1px dashed var(--border-hi);
+      border-radius: var(--r-lg);
+      padding: 48px 24px;
+      text-align: center; cursor: pointer;
+      transition: border-color 150ms, background 150ms;
+      background: var(--bg-surface);
+    }
+    .upload-zone:hover, .upload-zone.drag-over {
+      border-color: rgba(124,58,237,0.55);
+      background: var(--purple-tint);
+    }
+    .uz-icon { font-size: 30px; margin-bottom: 12px; display: block; }
+    .uz-title { font-size: 14px; color: var(--text-sec); margin-bottom: 4px; }
+    .uz-title span { color: var(--purple-light); font-weight: 500; cursor: pointer; }
+    .uz-sub { font-size: 12px; color: var(--text-muted); }
+    #file-input { display: none; }
+
+    .file-queue { margin-top: 14px; display: flex; flex-direction: column; gap: 6px; }
+    .file-item {
+      display: flex; align-items: center; gap: 10px;
+      background: var(--bg-elevated); border: 1px solid var(--border);
+      border-radius: var(--r); padding: 10px 14px;
+    }
+    .fi-icon {
+      font-family: var(--mono); font-size: 9px; font-weight: 500;
+      color: var(--purple-light); background: var(--purple-tint);
+      border: 1px solid rgba(124,58,237,0.25); border-radius: 5px;
+      padding: 3px 6px; flex-shrink: 0;
+    }
+    .fi-name { flex: 1; font-size: 13px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .fi-size { font-family: var(--mono); font-size: 11px; color: var(--text-muted); flex-shrink: 0; }
+    .fi-status {
+      font-size: 10px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase;
+      padding: 3px 9px; border-radius: var(--r-pill); border: 1px solid;
+    }
+    .fi-status.pending { color: var(--text-muted); border-color: var(--border); background: var(--bg-active); }
+    .fi-status.loading { color: var(--warn);    border-color: rgba(251,191,36,0.4);   background: rgba(251,191,36,0.08); }
+    .fi-status.done    { color: var(--ok);       border-color: rgba(52,211,153,0.4);  background: rgba(52,211,153,0.08); }
+    .fi-status.error   { color: var(--danger);   border-color: rgba(248,113,113,0.4); background: rgba(248,113,113,0.08); }
+    .fi-remove {
+      border: none; background: transparent; color: var(--text-muted);
+      cursor: pointer; padding: 3px 5px; font-size: 13px; line-height: 1;
+      border-radius: 5px; transition: color 130ms, background 130ms;
+    }
+    .fi-remove:hover { color: var(--danger); background: rgba(248,113,113,0.10); }
+    .upload-actions { margin-top: 12px; display: flex; gap: 8px; }
+
+    /* Form */
+    .form-group { margin-bottom: 20px; max-width: 520px; }
+    .form-label {
+      display: block; margin-bottom: 7px;
+      font-size: 12px; font-weight: 500; color: var(--text-muted);
+      letter-spacing: 0.04em;
+    }
+    .form-input {
+      width: 100%; background: var(--bg-elevated);
+      border: 1px solid var(--border-hi); border-radius: var(--r);
+      color: var(--text); font-family: var(--sans); font-size: 13px;
+      padding: 10px 14px; outline: none;
+      transition: border-color 150ms, box-shadow 150ms;
+    }
+    .form-input:focus {
+      border-color: rgba(124,58,237,0.55);
+      box-shadow: 0 0 0 3px rgba(124,58,237,0.10);
+    }
+    .form-hint { margin-top: 5px; font-size: 12px; color: var(--text-muted); }
+
+    .ingest-result {
+      display: none; margin-top: 14px;
+      background: var(--bg-elevated); border: 1px solid var(--border);
+      border-radius: var(--r-lg); padding: 16px; max-width: 520px;
+    }
+    .ingest-result.show { display: block; animation: fadeUp 250ms ease both; }
+    .ir-row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 7px 0; border-bottom: 1px solid var(--border);
+    }
+    .ir-row:last-child { border-bottom: none; }
+    .ir-key { font-size: 12px; color: var(--text-muted); }
+    .ir-val { font-family: var(--mono); font-size: 13px; color: var(--purple-light); font-weight: 500; }
+
+    /* Stats */
+    .stats-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; margin-bottom: 20px; }
+    .stat-card {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: var(--r-lg); padding: 18px 20px;
+      position: relative; overflow: hidden;
+    }
+    .stat-card::before {
+      content: ""; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+      background: linear-gradient(90deg, var(--purple), var(--purple-mid));
+    }
+    .sc-val {
+      font-size: 32px; font-weight: 600;
+      color: var(--text); margin-bottom: 4px;
+      line-height: 1; letter-spacing: -0.02em;
+    }
+    .sc-label { font-size: 12px; color: var(--text-muted); }
+
+    .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+    .section-title { font-size: 12px; font-weight: 500; color: var(--text-muted); letter-spacing: 0.06em; text-transform: uppercase; }
+    .doc-table {
+      background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--r-lg); overflow: hidden;
+    }
+    .dt-header, .dt-row { display: grid; grid-template-columns: 1fr 90px 90px; padding: 10px 16px; gap: 8px; }
+    .dt-header { border-bottom: 1px solid var(--border); }
+    .dt-header span { font-size: 11px; color: var(--text-muted); letter-spacing: 0.08em; text-transform: uppercase; }
+    .dt-row { border-bottom: 1px solid var(--border); transition: background 120ms; }
+    .dt-row:last-child { border-bottom: none; }
+    .dt-row:hover { background: var(--bg-hover); }
+    .dt-name { font-size: 13px; color: var(--text-sec); }
+    .dt-chunks { font-family: var(--mono); font-size: 13px; color: var(--purple-light); text-align: right; }
+    .dt-type { font-size: 12px; color: var(--text-muted); text-align: right; }
+
+    /* Danger zone */
+    .danger-zone {
+      max-width: 520px; background: var(--bg-elevated);
+      border: 1px solid var(--border); border-radius: var(--r-xl); padding: 24px;
+    }
+    .dz-title {
+      font-size: 16px; font-weight: 600; color: var(--text);
+      margin-bottom: 8px; display: flex; align-items: center; gap: 8px;
+    }
+    .dz-title::before { content: "⚠"; color: var(--danger); }
+    .dz-desc { font-size: 13px; color: var(--text-muted); line-height: 1.70; margin-bottom: 16px; }
+    .dz-warning {
+      background: rgba(248,113,113,0.07); border: 1px solid rgba(248,113,113,0.30);
+      border-radius: var(--r-sm); color: var(--danger); font-size: 12px;
+      padding: 10px 13px; margin-bottom: 16px;
+    }
+    .confirm-row { display: flex; align-items: center; gap: 9px; margin-bottom: 14px; }
+    .confirm-row input[type="checkbox"] { accent-color: var(--purple); width: 15px; height: 15px; }
+    .confirm-row label { font-size: 13px; color: var(--text-sec); cursor: pointer; }
+
+    /* Buttons */
+    .btn {
+      font-family: var(--sans); font-size: 13px; font-weight: 500;
+      cursor: pointer; border-radius: var(--r-pill);
+      padding: 9px 18px; border: 1px solid transparent;
+      transition: all 150ms ease; white-space: nowrap; letter-spacing: 0.01em;
+    }
+    .btn:disabled { opacity: 0.40; cursor: not-allowed; }
+    .btn-primary {
+      background: var(--purple-btn); color: #fff; border-color: transparent;
+      box-shadow: 0 0 16px rgba(124,58,237,0.35);
+    }
+    .btn-primary:hover:not(:disabled) { box-shadow: 0 0 26px rgba(124,58,237,0.55); transform: translateY(-1px); }
+    .btn-ghost {
+      background: var(--bg-elevated); color: var(--text-sec); border-color: var(--border-hi);
+    }
+    .btn-ghost:hover:not(:disabled) { border-color: var(--text-muted); color: var(--text); }
+    .btn-danger {
+      background: transparent; color: var(--danger);
+      border-color: rgba(248,113,113,0.40);
+    }
+    .btn-danger:hover:not(:disabled) { background: rgba(248,113,113,0.09); border-color: var(--danger); }
+
+    /* Header btn */
+    .header-btn {
+      font-family: var(--sans); font-size: 12px; font-weight: 500;
+      color: var(--text-muted); background: var(--bg-elevated);
+      border: 1px solid var(--border); border-radius: var(--r-pill);
+      padding: 5px 12px; cursor: pointer;
+      transition: border-color 130ms, color 130ms;
+    }
+    .header-btn:hover { border-color: var(--border-hi); color: var(--text-sec); }
+
+    /* Modal */
+    .modal-overlay {
+      position: fixed; inset: 0;
+      background: rgba(13,13,15,0.80);
+      backdrop-filter: blur(6px);
+      display: flex; align-items: center; justify-content: center;
+      opacity: 0; pointer-events: none;
+      transition: opacity 180ms ease; z-index: 200;
+    }
+    .modal-overlay.show { opacity: 1; pointer-events: auto; }
+    .modal {
+      width: 420px; background: var(--bg-elevated);
+      border: 1px solid var(--border-hi); border-radius: var(--r-xl);
+      padding: 28px; box-shadow: 0 24px 80px rgba(0,0,0,0.60);
+      animation: fadeUp 200ms ease both;
+    }
+    .modal-title { font-size: 17px; font-weight: 600; color: var(--text); margin-bottom: 8px; }
+    .modal-desc { font-size: 13px; color: var(--text-muted); line-height: 1.68; margin-bottom: 20px; }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+    /* Toast */
+    .toast {
+      position: fixed; right: 18px; bottom: 18px;
+      padding: 11px 16px; border-radius: var(--r);
+      border: 1px solid; font-size: 13px;
+      opacity: 0; transform: translateY(8px);
+      pointer-events: none; transition: all 180ms ease;
+      z-index: 300; max-width: 300px;
+    }
+    .toast.show { opacity: 1; transform: translateY(0); }
+    .toast.success { background: rgba(52,211,153,0.10); color: var(--ok);    border-color: rgba(52,211,153,0.35); }
+    .toast.error   { background: rgba(248,113,113,0.10); color: var(--danger); border-color: rgba(248,113,113,0.35); }
+
+    /* ════════════════════════════════
+       ANIMATIONS
+    ════════════════════════════════ */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(10px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes float {
+      0%,100% { transform: translateY(0); }
+      50%      { transform: translateY(-8px); }
+    }
+    @keyframes pulse-dot {
+      0%,60%,100% { opacity: 0.20; transform: scale(0.75); }
+      30%          { opacity: 1;   transform: scale(1); }
+    }
+    @keyframes bar-grow {
+      from { width: 0; }
+    }
+
+    /* ── Retrieval Source Badges ── */
+    .rs-badge {
+      display: inline-flex;
+      align-items: center;
+      font-family: var(--mono);
+      font-size: 9px;
+      font-weight: 500;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      padding: 2px 6px;
+      border-radius: var(--r-pill);
+      line-height: 1;
+      vertical-align: middle;
+      margin-left: 4px;
+    }
+    .rs-vector {
+      background: rgba(96,165,250,0.15);
+      color: #60A5FA;
+      border: 1px solid rgba(96,165,250,0.25);
+    }
+    .rs-bm25 {
+      background: rgba(251,191,36,0.15);
+      color: #FBBF24;
+      border: 1px solid rgba(251,191,36,0.25);
+    }
+    .rs-hybrid {
+      background: rgba(52,211,153,0.15);
+      color: #34D399;
+      border: 1px solid rgba(52,211,153,0.25);
+    }
+
+    /* ── Query Rewrite Card ── */
+    .rewrite-card {
+      background: var(--purple-tint);
+      border: 1px solid rgba(124,58,237,0.2);
+      border-radius: var(--r);
+      padding: 8px 12px;
+      margin-bottom: 8px;
+      font-size: 12px;
+    }
+    .rewrite-header {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 4px;
+    }
+    .rewrite-icon {
+      color: var(--purple-light);
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .rewrite-label {
+      color: var(--purple-light);
+      font-weight: 500;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .rewrite-detail {
+      color: var(--text-sec);
+      font-size: 11px;
+      line-height: 1.5;
+    }
+    .rewrite-reason {
+      color: var(--text-sec);
+    }
+    .rewrite-expanded {
+      display: inline-block;
+      margin-left: 6px;
+      color: var(--purple-mid);
+      font-family: var(--mono);
+      font-size: 10px;
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 760px) {
+      :root { --sidebar-w: 52px; }
+      .sidebar-section-label, .ni-badge, .sidebar-footer,
+      .sidebar-new-chat span, .nav-item span:not(.ni-icon) { display: none; }
+      .nav-item { justify-content: center; padding: 10px; }
+      .stats-grid { grid-template-columns: 1fr; }
+      .dt-header, .dt-row { grid-template-columns: 1fr 70px; }
+      .dt-type { display: none; }
+      .grounding-row { grid-template-columns: 1fr; }
+      .panel-body { padding: 14px; }
+      .chat-area { padding: 14px; }
+      .input-area { padding: 10px 14px 12px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ═══ TOPBAR ═══ -->
+  <header class="topbar">
+    <div class="logo-block">
+      <div class="logo-orb"></div>
+      <span class="logo-text">Insight-RAG</span>
+    </div>
+    <div class="topbar-center">
+      <span class="topbar-crumb" id="conn-status">
+        <strong>—</strong>
+      </span>
+    </div>
+    <div class="topbar-right">
+      <div class="chip"><span class="status-dot" id="status-dot"></span><span id="status-label">checking</span></div>
+      <div class="chip">Hybrid RAG</div>
+      <div class="chip">MiniLM-L6</div>
+      <div class="chip">BM25 + Vector</div>
+    </div>
+  </header>
+
+  <div class="layout">
+
+    <!-- ═══ SIDEBAR ═══ -->
+    <nav class="sidebar">
+      <div class="sidebar-new-chat" id="new-chat-btn">
+        <span style="font-size:16px;">+</span>
+        <span>New Chat</span>
+      </div>
+
+      <div class="sidebar-section-label">Features</div>
+      <div class="nav-item active" data-panel="query">
+        <span class="ni-icon">◈</span>
+        <span>Chat</span>
+        <span class="ni-badge" id="msg-count" style="display:none;">0</span>
+      </div>
+
+      <div class="sidebar-section-label">Ingest</div>
+      <div class="nav-item" data-panel="upload">
+        <span class="ni-icon">↑</span>
+        <span>Upload File</span>
+      </div>
+      <div class="nav-item" data-panel="folder">
+        <span class="ni-icon">⊞</span>
+        <span>Ingest Folder</span>
+      </div>
+
+      <div class="sidebar-section-label">System</div>
+      <div class="nav-item" data-panel="stats">
+        <span class="ni-icon">◎</span>
+        <span>Statistics</span>
+      </div>
+      <div class="nav-item" data-panel="clear">
+        <span class="ni-icon">⊘</span>
+        <span>Clear Store</span>
+      </div>
+
+      <div class="sidebar-footer">
+        <div class="sf-row">
+          <span class="sf-label">Docs</span>
+          <span class="sf-val accent" id="sb-docs">—</span>
+        </div>
+        <div class="sf-row">
+          <span class="sf-label">Chunks</span>
+          <span class="sf-val" id="sb-chunks">—</span>
+        </div>
+        <div class="sf-row">
+          <span class="sf-label">Mode</span>
+          <span class="sf-val accent">local</span>
+        </div>
+      </div>
+    </nav>
+
+    <!-- ═══ MAIN ═══ -->
+    <div class="main">
+
+      <!-- QUERY PANEL -->
+      <section class="panel active" id="panel-query">
+        <div class="panel-header">
+          <span class="panel-title">Document Query</span>
+          <span class="panel-sub" id="query-status">Ask anything from your indexed documents</span>
+          <div class="panel-header-right">
+            <button id="clearBtn" class="header-btn" type="button">Clear chat</button>
+          </div>
+        </div>
+
+        <div class="chat-area" id="chat-area">
+          <div class="empty-state" id="empty-state">
+            <div class="es-orb"></div>
+            <div class="es-title">Ready to Create Something New?</div>
+            <div class="es-sub">Ask any question about your ingested documents and get cited answers.</div>
+            <div class="es-examples" id="example-list"></div>
+          </div>
+        </div>
+
+        <div class="input-area">
+          <div class="input-shell">
+            <span style="color:var(--purple-light);font-size:16px;padding-bottom:8px;flex-shrink:0;">✦</span>
+            <textarea id="query-input" class="query-input" rows="1"
+              placeholder="Ask anything…"></textarea>
+            <div class="input-controls">
+              <select id="topk-select" class="topk-select">
+                <option value="3">k=3</option>
+                <option value="5" selected>k=5</option>
+                <option value="7">k=7</option>
+                <option value="10">k=10</option>
+              </select>
+              <button id="askBtn" class="ask-btn" type="button" title="Send">↑</button>
+            </div>
+          </div>
+          <div class="input-hint">
+            <span>Enter to send · Shift+Enter for new line</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- UPLOAD PANEL -->
+      <section class="panel" id="panel-upload">
+        <div class="panel-header">
+          <span class="panel-title">Upload Document</span>
+          <span class="panel-sub">Add files to the knowledge base</span>
+        </div>
+        <div class="panel-body">
+          <div class="upload-zone" id="upload-zone">
+            <span class="uz-icon">📄</span>
+            <div class="uz-title">Drop files here or <span>browse</span></div>
+            <div class="uz-sub">.txt &nbsp;·&nbsp; .pdf &nbsp;·&nbsp; .md</div>
+            <input id="file-input" type="file" multiple accept=".txt,.pdf,.md">
+          </div>
+          <div class="file-queue" id="file-queue"></div>
+          <div class="upload-actions" id="upload-actions" style="display:none;">
+            <button id="uploadBtn" class="btn btn-primary" type="button">Ingest All</button>
+            <button id="clear-queue-btn" class="btn btn-ghost" type="button">Clear Queue</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- FOLDER PANEL -->
+      <section class="panel" id="panel-folder">
+        <div class="panel-header">
+          <span class="panel-title">Ingest Folder</span>
+          <span class="panel-sub">Load all documents from a directory path</span>
+        </div>
+        <div class="panel-body">
+          <div class="form-group">
+            <label class="form-label" for="folder-path">Folder Path</label>
+            <input id="folder-path" class="form-input" type="text" value="./docs"
+              placeholder="./docs or C:\data\contracts">
+            <div class="form-hint">Example: ./docs &nbsp;or&nbsp; C:\data\contracts</div>
+          </div>
+          <button id="ingest-folder-btn" class="btn btn-primary" type="button">Load Folder</button>
+          <div id="ingest-result" class="ingest-result">
+            <div class="ir-row"><span class="ir-key">Files processed</span><span id="ir-files" class="ir-val">—</span></div>
+            <div class="ir-row"><span class="ir-key">Chunks added</span><span id="ir-chunks" class="ir-val">—</span></div>
+            <div class="ir-row"><span class="ir-key">Status</span><span id="ir-status" class="ir-val">—</span></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- STATS PANEL -->
+      <section class="panel" id="panel-stats">
+        <div class="panel-header">
+          <span class="panel-title">Statistics</span>
+          <span class="panel-sub">Vector store overview and dataset coverage</span>
+          <div class="panel-header-right">
+            <button id="refreshBtn" class="header-btn" type="button">Refresh</button>
+          </div>
+        </div>
+        <div class="panel-body">
+          <div class="stats-grid">
+            <div class="stat-card"><div id="stat-docs" class="sc-val">—</div><div class="sc-label">Documents</div></div>
+            <div class="stat-card"><div id="stat-chunks" class="sc-val">—</div><div class="sc-label">Chunks Stored</div></div>
+            <div class="stat-card"><div id="stat-cuad" class="sc-val">—</div><div class="sc-label">CUAD Docs</div></div>
+          </div>
+          <div class="section-header">
+            <div class="section-title">Dataset Coverage</div>
+          </div>
+          <div class="doc-table">
+            <div class="dt-header">
+              <span>Group</span>
+              <span style="text-align:right">Docs</span>
+              <span style="text-align:right">Type</span>
+            </div>
+            <div id="doc-list-body"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- CLEAR PANEL -->
+      <section class="panel" id="panel-clear">
+        <div class="panel-header">
+          <span class="panel-title">Clear Vector Store</span>
+          <span class="panel-sub">Danger zone — permanent action</span>
+        </div>
+        <div class="panel-body">
+          <div class="danger-zone">
+            <div class="dz-title">Wipe All Documents</div>
+            <div class="dz-desc">
+              This permanently removes all stored chunks and embeddings from the vector database.
+              Re-ingestion of all documents will be required after this action.
+            </div>
+            <div class="dz-warning">⚠ This action cannot be undone.</div>
+            <div class="confirm-row">
+              <input id="confirm-check" type="checkbox">
+              <label for="confirm-check">I understand this will permanently delete all vectors</label>
+            </div>
+            <button id="clearIndexBtn" class="btn btn-danger" type="button" disabled>Clear Store</button>
+          </div>
+        </div>
+      </section>
+
+    </div><!-- /.main -->
+  </div><!-- /.layout -->
+
+  <!-- MODAL -->
+  <div id="clear-modal" class="modal-overlay">
+    <div class="modal">
+      <div class="modal-title">Confirm Clear Store</div>
+      <div class="modal-desc">All indexed vectors will be permanently deleted. This cannot be undone. Continue?</div>
+      <div class="modal-actions">
+        <button id="modal-cancel" class="btn btn-ghost" type="button">Cancel</button>
+        <button id="modal-confirm" class="btn btn-danger" type="button">Yes, Clear</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST -->
+  <div id="toast" class="toast"></div>
+
+  <script>
+    /* ═══════════════════════════════
+       CONFIG
+    ═══════════════════════════════ */
+    const FALLBACK_MSG     = "I could not find reliable information in the indexed documents.";
+    const MIN_SOURCE_SCORE = 0.20;
+
+    let fileQueue  = [];
+    let msgCount   = 0;
+    let isQuerying = false;
+    let sessionId  = null;  // Chat memory session
+
+    /* ═══════════════════════════════
+       DOM REFS
+    ═══════════════════════════════ */
+    const el = {
+      connStatus:      document.getElementById("conn-status"),
+      statusDot:       document.getElementById("status-dot"),
+      statusLabel:     document.getElementById("status-label"),
+      navItems:        [...document.querySelectorAll(".nav-item")],
+      panels:          [...document.querySelectorAll(".panel")],
+      chatArea:        document.getElementById("chat-area"),
+      emptyState:      document.getElementById("empty-state"),
+      exampleList:     document.getElementById("example-list"),
+      queryInput:      document.getElementById("query-input"),
+      topk:            document.getElementById("topk-select"),
+      askBtn:          document.getElementById("askBtn"),
+      clearBtn:        document.getElementById("clearBtn"),
+      newChatBtn:      document.getElementById("new-chat-btn"),
+      queryStatus:     document.getElementById("query-status"),
+      msgCount:        document.getElementById("msg-count"),
+      uploadZone:      document.getElementById("upload-zone"),
+      fileInput:       document.getElementById("file-input"),
+      fileQueue:       document.getElementById("file-queue"),
+      uploadActions:   document.getElementById("upload-actions"),
+      uploadBtn:       document.getElementById("uploadBtn"),
+      clearQueueBtn:   document.getElementById("clear-queue-btn"),
+      ingestFolderBtn: document.getElementById("ingest-folder-btn"),
+      folderPath:      document.getElementById("folder-path"),
+      ingestResult:    document.getElementById("ingest-result"),
+      irFiles:         document.getElementById("ir-files"),
+      irChunks:        document.getElementById("ir-chunks"),
+      irStatus:        document.getElementById("ir-status"),
+      statDocs:        document.getElementById("stat-docs"),
+      statChunks:      document.getElementById("stat-chunks"),
+      statCuad:        document.getElementById("stat-cuad"),
+      docListBody:     document.getElementById("doc-list-body"),
+      refreshBtn:      document.getElementById("refreshBtn"),
+      sbDocs:          document.getElementById("sb-docs"),
+      sbChunks:        document.getElementById("sb-chunks"),
+      confirmCheck:    document.getElementById("confirm-check"),
+      clearIndexBtn:   document.getElementById("clearIndexBtn"),
+      clearModal:      document.getElementById("clear-modal"),
+      modalCancel:     document.getElementById("modal-cancel"),
+      modalConfirm:    document.getElementById("modal-confirm"),
+      toast:           document.getElementById("toast"),
+    };
+
+    /* ═══════════════════════════════
+       UTILITIES
+    ═══════════════════════════════ */
+    function showToast(msg, type = "success") {
+      el.toast.textContent = msg;
+      el.toast.className = "toast show " + type;
+      clearTimeout(showToast._t);
+      showToast._t = setTimeout(() => el.toast.classList.remove("show"), 3200);
+    }
+
+    function escHtml(s) {
+      return String(s)
+        .replace(/&/g,"&amp;").replace(/</g,"&lt;")
+        .replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+    }
+
+    function switchPanel(id) {
+      el.panels.forEach(p => p.classList.remove("active"));
+      el.navItems.forEach(n => n.classList.remove("active"));
+      document.getElementById("panel-" + id).classList.add("active");
+      const nav = el.navItems.find(n => n.dataset.panel === id);
+      if (nav) nav.classList.add("active");
+      if (id === "stats") loadStats();
+    }
+
+    function autoResize() {
+      el.queryInput.style.height = "auto";
+      el.queryInput.style.height = Math.min(el.queryInput.scrollHeight, 110) + "px";
+    }
+
+    function resetChat() {
+      el.queryInput.value = ""; autoResize();
+      el.chatArea.innerHTML = `
+        <div class="empty-state" id="empty-state">
+          <div class="es-orb"></div>
+          <div class="es-title">Ready to Create Something New?</div>
+          <div class="es-sub">Ask any question about your ingested documents and get cited answers.</div>
+          <div class="es-examples" id="example-list"></div>
+        </div>`;
+      msgCount = 0;
+      el.msgCount.style.display = "none";
+      el.emptyState  = document.getElementById("empty-state");
+      el.exampleList = document.getElementById("example-list");
+      loadSamples();
+      el.queryStatus.textContent = "Ask anything from your indexed documents";
+      // Create fresh session for chat memory
+      createSession();
+    }
+
+    /* ═══════════════════════════════
+       CONFIDENCE HELPERS
+    ═══════════════════════════════ */
+    function confLevel(conf) {
+      const c = String(conf || "low").toLowerCase();
+      if (c === "high") return "high";
+      if (c === "medium") return "medium";
+      return "low";
+    }
+    function confToScore(conf) {
+      if (conf === "high")   return 88;
+      if (conf === "medium") return 62;
+      return 30;
+    }
+    function isAnswerReliable(conf, srcs) {
+      if (confLevel(conf) === "low") return false;
+      if (!srcs.length) return false;
+      return true;
+    }
+
+    /* ═══════════════════════════════
+       MESSAGE RENDERER
+    ═══════════════════════════════ */
+    function ensureConversation() {
+      let conv = document.getElementById("conversation");
+      if (!conv) {
+        if (el.emptyState) { el.emptyState.remove(); el.emptyState = null; }
+        conv = document.createElement("div");
+        conv.id = "conversation";
+        el.chatArea.appendChild(conv);
+      }
+      return conv;
+    }
+
+    function addMessageNode(role, htmlBody) {
+      const conv = ensureConversation();
+      const node = document.createElement("div");
+      node.className = "msg " + role;
+      node.innerHTML = `
+        <div class="msg-label">${role === "user" ? "You" : "Insight-RAG"}</div>
+        <div class="msg-bubble">${htmlBody}</div>`;
+      conv.appendChild(node);
+      el.chatArea.scrollTop = el.chatArea.scrollHeight;
+      return node;
+    }
+
+    /* ═══════════════════════════════
+       RETRIEVAL SOURCE BADGES
+    ═══════════════════════════════ */
+    function buildRetrievalBadges(sources) {
+      if (!sources || !Array.isArray(sources) || !sources.length) return "";
+      const hasVector = sources.includes("vector");
+      const hasBm25   = sources.includes("bm25");
+      let badges = "";
+      if (hasVector && hasBm25) {
+        badges = `<span class="rs-badge rs-hybrid" title="Found by both vector &amp; keyword search">hybrid</span>`;
+      } else if (hasVector) {
+        badges = `<span class="rs-badge rs-vector" title="Found by semantic (vector) search">vector</span>`;
+      } else if (hasBm25) {
+        badges = `<span class="rs-badge rs-bm25" title="Found by keyword (BM25) search">BM25</span>`;
+      }
+      return badges;
+    }
+
+    /* ═══════════════════════════════
+       ANSWER BUILDER
+    ═══════════════════════════════ */
+    function buildAnswerHtml(data) {
+      const conf = confLevel(data.confidence);
+      const allSources = Array.isArray(data.sources) ? data.sources : [];
+      const seen = new Set();
+      const goodSources = allSources.filter(s => {
+        const key = `${s.filename || ""}:${s.chunk_index ?? ""}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return typeof s.score === "number" && s.score >= MIN_SOURCE_SCORE;
+      });
+
+      if (!isAnswerReliable(data.confidence, goodSources)) return buildFallbackHtml();
+
+      const answerText = (data.answer || "").trim();
+      const topScore   = goodSources.length ? goodSources[0].score : 0;
+      const blendScore = Math.round((confToScore(conf) * 0.55) + (topScore * 100 * 0.45));
+      const clampScore = Math.min(98, Math.max(10, blendScore));
+
+      /* Best source */
+      let bestSourceHtml = "";
+      if (goodSources.length) {
+        const s = goodSources[0];
+        const pct = Math.round(s.score * 100);
+        const rsBadges = buildRetrievalBadges(s.retrieval_sources);
+        bestSourceHtml = `
+          <div class="best-source">
+            <div class="best-source-header">
+              <span class="best-source-tag">Best match</span>
+              ${rsBadges}
+              <div class="best-source-filename" title="${escHtml(s.filename || "")}">${escHtml(s.filename || "Unknown")}</div>
+              <span class="best-source-pct">${pct}%</span>
+            </div>
+            <div class="source-bar-track">
+              <div class="source-bar-fill" style="width:${pct}%; animation:bar-grow 600ms ease both;"></div>
+            </div>
+            ${s.snippet ? `<div class="best-source-snippet">${escHtml(s.snippet)}</div>` : ""}
+          </div>`;
+      }
+
+      /* More sources */
+      let moreHtml = "";
+      if (goodSources.length > 1) {
+        const items = goodSources.slice(1).map(s => {
+          const pct = Math.round(s.score * 100);
+          const rsBadges = buildRetrievalBadges(s.retrieval_sources);
+          return `
+            <div class="source-item">
+              <div class="source-item-top">
+                <div class="source-filename" title="${escHtml(s.filename || "")}">${escHtml(s.filename || "Unknown")}</div>
+                ${rsBadges}
+                <span class="source-score-pct">${pct}%</span>
+              </div>
+              <div class="source-bar-track" style="margin-bottom:4px;">
+                <div class="source-bar-fill" style="width:${pct}%; animation:bar-grow 600ms ease both;"></div>
+              </div>
+              ${s.snippet ? `<div class="source-snippet">${escHtml(s.snippet)}</div>` : ""}
+            </div>`;
+        }).join("");
+        const n = goodSources.length - 1;
+        moreHtml = `
+          <details class="collapse-block">
+            <summary class="collapse-summary">
+              <span class="collapse-arrow">›</span>
+              ${n} more source${n > 1 ? "s" : ""}
+            </summary>
+            <div class="collapse-body">${items}</div>
+          </details>`;
+      }
+
+      const groundingHtml = buildGroundingHtml(answerText, goodSources);
+
+      return `
+        <div class="answer-card">
+          <div class="answer-primary">${escHtml(answerText)}</div>
+          <div class="accuracy-block">
+            <div class="accuracy-header">
+              <span class="accuracy-label">Accuracy</span>
+              <div class="accuracy-right">
+                <span class="conf-badge ${conf}">${conf}</span>
+                <span class="accuracy-pct ${conf}">${clampScore}%</span>
+              </div>
+            </div>
+            <div class="accuracy-bar-track">
+              <div class="accuracy-bar-fill ${conf}"
+                style="width:${clampScore}%; animation:bar-grow 700ms cubic-bezier(.4,0,.2,1) both;"></div>
+            </div>
+          </div>
+          ${bestSourceHtml}
+          ${moreHtml}
+          ${groundingHtml}
+        </div>`;
+    }
+
+    /* ═══════════════════════════════
+       GROUNDING CHECK
+    ═══════════════════════════════ */
+    function buildGroundingHtml(answerText, sources) {
+      if (!answerText || !sources.length) return "";
+      const STOP = new Set(["the","and","for","are","but","not","you","all","any","can","had","her","was","one","our","out","day","get","has","him","his","how","its","new","now","old","see","two","way","who","did","man","men","she","too","use","that","this","with","they","have","from","been","were","said","each","which","their","when","will","more","than","also","into","some","what","there","about","would"]);
+      const tok = s => (s.toLowerCase().match(/\b[a-z]{4,}\b/g) || []).filter(w => !STOP.has(w));
+      const overlap = (a, b) => { if (!a.length) return 0; const bs = new Set(b); return a.filter(w => bs.has(w)).length / a.length; };
+      const sents = answerText.split(/(?<=[.!?])\s+/).filter(s => s.trim().length > 0);
+      if (!sents.length) return "";
+      let matched = 0;
+      const rows = sents.map(sent => {
+        const st = tok(sent); let best = 0, bSnip = "", bFile = "";
+        sources.forEach(src => { const sc = overlap(st, tok(src.snippet || "")); if (sc > best) { best = sc; bSnip = src.snippet || ""; bFile = src.filename || ""; } });
+        const ok = best >= 0.25; if (ok) matched++;
+        return `<div class="grounding-row">
+          <div class="grounding-sentence">${escHtml(sent)}</div>
+          <div class="grounding-evidence ${ok ? "matched" : "unmatched"}">
+            ${ok ? escHtml(bSnip.slice(0,180)) + (bSnip.length > 180 ? "…" : "") : "No matching evidence found"}
+            ${ok ? `<div class="grounding-evidence-src">${escHtml(bFile)}</div>` : ""}
+          </div>
+        </div>`;
+      }).join("");
+      const [bc, bl] = matched === sents.length ? ["grounded","Fully grounded"] : matched > 0 ? ["partial","Partially grounded"] : ["ungrounded","Ungrounded"];
+      return `
+        <details class="collapse-block">
+          <summary class="collapse-summary">
+            <span class="collapse-arrow">›</span>
+            Grounding check
+            <span class="collapse-badge ${bc}">${bl}</span>
+          </summary>
+          <div class="collapse-body">${rows}</div>
+        </details>`;
+    }
+
+    function buildFallbackHtml() {
+      return `
+        <div class="no-match-card">
+          <div class="no-match-banner">⊘ No reliable match found in indexed documents.</div>
+          <div class="no-match-text">${escHtml(FALLBACK_MSG)}</div>
+        </div>`;
+    }
+
+    /* ═══════════════════════════════
+       QUERY
+    ═══════════════════════════════ */
+    async function sendQuery() {
+      const question = el.queryInput.value.trim();
+      if (!question || isQuerying) return;
+      isQuerying = true; el.askBtn.disabled = true;
+      addMessageNode("user", escHtml(question));
+      msgCount++;
+      el.msgCount.style.display = "inline-flex";
+      el.msgCount.textContent = String(msgCount);
+      el.queryInput.value = ""; autoResize();
+      const thinkNode = addMessageNode("bot",
+        `<div class="thinking"><span></span><span></span><span></span></div>`);
+      try {
+        const resp = await fetch("/query", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            question,
+            top_k: Number(el.topk.value),
+            use_citations: true,
+            session_id: sessionId
+          })
+        });
+        const raw = await resp.text();
+        thinkNode.remove();
+        if (!resp.ok) {
+          let msg = "Query failed";
+          try { msg = JSON.parse(raw).detail || msg; } catch (_) {}
+          addMessageNode("bot", `<span style="color:var(--danger);font-size:12px;">${escHtml("Error: " + msg)}</span>`);
+          el.queryStatus.textContent = "Query failed";
+          showToast(msg, "error"); return;
+        }
+        const data = JSON.parse(raw);
+        // Update session ID from server
+        if (data.session_id) sessionId = data.session_id;
+        // Build answer with metadata
+        let answerHtml = buildAnswerHtml(data);
+        // Prepend query rewrite info if query was rewritten
+        if (data.query_rewrite && data.query_rewrite.was_rewritten) {
+          answerHtml = buildRewriteHtml(data.query_rewrite) + answerHtml;
+        }
+        addMessageNode("bot", answerHtml);
+        el.queryStatus.textContent = `Last: ${question.slice(0,55)}${question.length > 55 ? "…" : ""}`;
+      } catch (err) {
+        thinkNode.remove();
+        addMessageNode("bot", `<span style="color:var(--danger);font-size:12px;">${escHtml("Error: " + (err.message || "network error"))}</span>`);
+        showToast("Network error", "error");
+      } finally { isQuerying = false; el.askBtn.disabled = false; }
+    }
+
+    /* ═══════════════════════════════
+       SESSION MANAGEMENT
+    ═══════════════════════════════ */
+    async function createSession() {
+      try {
+        const res = await fetch("/session", { method: "POST" });
+        if (res.ok) {
+          const data = await res.json();
+          sessionId = data.session_id;
+        }
+      } catch (_) { /* session creation is best-effort */ }
+    }
+
+    /* ═══════════════════════════════
+       QUERY REWRITE DISPLAY
+    ═══════════════════════════════ */
+    function buildRewriteHtml(rewrite) {
+      if (!rewrite || !rewrite.was_rewritten) return "";
+      const expanded = (rewrite.expanded_terms || []).length
+        ? `<span class="rewrite-expanded">+${rewrite.expanded_terms.join(", +")}</span>`
+        : "";
+      return `
+        <div class="rewrite-card">
+          <div class="rewrite-header">
+            <span class="rewrite-icon">↻</span>
+            <span class="rewrite-label">Query rewritten</span>
+          </div>
+          <div class="rewrite-detail">
+            <span class="rewrite-reason">${escHtml(rewrite.reason || "")}</span>
+            ${expanded}
+          </div>
+        </div>`;
+    }
+
+    /* ═══════════════════════════════
+       FILE UPLOAD
+    ═══════════════════════════════ */
+    function formatBytes(b) {
+      if (b < 1024) return b + " B";
+      if (b < 1048576) return (b / 1024).toFixed(1) + " KB";
+      return (b / 1048576).toFixed(1) + " MB";
+    }
+    function addToQueue(files) {
+      const valid = files.filter(f => /\.(txt|pdf|md)$/i.test(f.name));
+      if (valid.length !== files.length) showToast("Only .txt .md .pdf are supported", "error");
+      valid.forEach(f => { if (!fileQueue.find(q => q.file.name === f.name && q.file.size === f.size)) fileQueue.push({ file: f, status: "pending" }); });
+      renderQueue();
+    }
+    function renderQueue() {
+      el.fileQueue.innerHTML = "";
+      fileQueue.forEach((item, idx) => {
+        const ext = item.file.name.split(".").pop().toUpperCase();
+        const row = document.createElement("div"); row.className = "file-item";
+        row.innerHTML = `
+          <div class="fi-icon">.${ext}</div>
+          <div class="fi-name">${escHtml(item.file.name)}</div>
+          <div class="fi-size">${formatBytes(item.file.size)}</div>
+          <div class="fi-status ${item.status}" id="fis-${idx}">${item.status}</div>
+          <button class="fi-remove" data-remove="${idx}" title="Remove">✕</button>`;
+        el.fileQueue.appendChild(row);
+      });
+      el.uploadActions.style.display = fileQueue.length ? "flex" : "none";
+    }
+    function setFileStatus(idx, status, detail = "") {
+      fileQueue[idx].status = status;
+      const badge = document.getElementById("fis-" + idx);
+      if (badge) { badge.className = "fi-status " + status; badge.textContent = status; if (detail) badge.title = detail; }
+    }
+    async function ingestFiles() {
+      if (!fileQueue.length) return; el.uploadBtn.disabled = true;
+      let ok = 0, fail = 0;
+      for (let i = 0; i < fileQueue.length; i++) {
+        setFileStatus(i, "loading");
+        const fd = new FormData(); fd.append("file", fileQueue[i].file);
+        try {
+          const res = await fetch("/ingest", { method: "POST", body: fd });
+          const body = await res.text();
+          if (!res.ok) { let d = "Upload failed"; try { d = JSON.parse(body).detail || d; } catch (_) {} setFileStatus(i, "error", d); fail++; }
+          else { setFileStatus(i, "done"); ok++; }
+        } catch (e) { setFileStatus(i, "error", e.message || "network error"); fail++; }
+      }
+      el.uploadBtn.disabled = false;
+      showToast(`Uploaded: ${ok}  Failed: ${fail}`, fail ? "error" : "success");
+      await loadStats(); await checkHealth();
+    }
+    async function ingestFolder() {
+      const path = el.folderPath.value.trim();
+      if (!path) { showToast("Enter a folder path", "error"); return; }
+      el.ingestFolderBtn.disabled = true; const prev = el.ingestFolderBtn.textContent;
+      el.ingestFolderBtn.textContent = "Loading…";
+      try {
+        const fd = new FormData(); fd.append("folder_path", path);
+        const res = await fetch("/ingest/folder", { method: "POST", body: fd });
+        const text = await res.text();
+        if (!res.ok) { let d = "Folder ingest failed"; try { d = JSON.parse(text).detail || d; } catch (_) {} showToast(d, "error"); return; }
+        const data = JSON.parse(text);
+        el.irFiles.textContent  = String(data.documents_processed || 0);
+        el.irChunks.textContent = String(data.chunks_added || 0);
+        el.irStatus.textContent = data.status || "success";
+        el.ingestResult.classList.add("show");
+        showToast("Folder ingested successfully", "success");
+        await loadStats();
+      } catch (e) { showToast(e.message || "Network error", "error"); }
+      finally { el.ingestFolderBtn.disabled = false; el.ingestFolderBtn.textContent = prev; }
+    }
+
+    /* ═══════════════════════════════
+       STATS
+    ═══════════════════════════════ */
+    async function loadStats() {
+      try {
+        const [sr, smr] = await Promise.all([fetch("/stats"), fetch("/samples")]);
+        if (!sr.ok) throw new Error();
+        const stats = await sr.json(); const samples = smr.ok ? await smr.json() : {};
+        const ds = samples.datasets || stats.dataset_status || {};
+        const docs = Number(ds.total_docs || 0);
+        const chunks = Number(stats.total_chunks || stats.total_documents || 0);
+        el.statDocs.textContent = String(docs); el.statChunks.textContent = String(chunks);
+        el.statCuad.textContent = String(ds.cuad_docs || 0);
+        el.sbDocs.textContent = String(docs); el.sbChunks.textContent = String(chunks);
+        el.docListBody.innerHTML = [
+          ["Wikipedia 2020", ds.wikipedia_2020_docs || 0, "dataset"],
+          ["Wikipedia 2023", ds.wikipedia_2023_docs || 0, "dataset"],
+          ["CUAD",           ds.cuad_docs || 0, "contract"],
+          ["Other",          ds.other_docs || 0, "misc"],
+        ].map(r => `<div class="dt-row"><div class="dt-name">${escHtml(r[0])}</div><div class="dt-chunks">${r[1]}</div><div class="dt-type">${escHtml(r[2])}</div></div>`).join("");
+      } catch (_) {
+        el.docListBody.innerHTML = `<div class="dt-row"><div class="dt-name">Stats unavailable</div><div class="dt-chunks">—</div><div class="dt-type">—</div></div>`;
+      }
+    }
+
+    /* ═══════════════════════════════
+       HEALTH
+    ═══════════════════════════════ */
+    async function checkHealth() {
+      try {
+        const res = await fetch("/health"); if (!res.ok) throw new Error();
+        const data = await res.json();
+        el.connStatus.innerHTML = `<strong>${escHtml(window.location.host)}</strong>`;
+        el.statusDot.className = "status-dot";
+        el.statusLabel.textContent = data.status || "online";
+      } catch (_) {
+        el.statusDot.className = "status-dot offline";
+        el.statusLabel.textContent = "offline";
+      }
+    }
+
+    /* ═══════════════════════════════
+       CLEAR MODAL
+    ═══════════════════════════════ */
+    function openClearModal()  { el.clearModal.classList.add("show"); }
+    function closeClearModal() { el.clearModal.classList.remove("show"); }
+    async function clearStore() {
+      closeClearModal();
+      try {
+        const res = await fetch("/clear", { method: "POST" }); const text = await res.text();
+        if (!res.ok) { let d = "Clear failed"; try { d = JSON.parse(text).detail || d; } catch (_) {} showToast(d, "error"); return; }
+        showToast("Vector store cleared", "success");
+        el.confirmCheck.checked = false; el.clearIndexBtn.disabled = true;
+        await loadStats();
+      } catch (e) { showToast(e.message || "Network error", "error"); }
+    }
+
+    /* ═══════════════════════════════
+       EXAMPLE CHIPS
+    ═══════════════════════════════ */
+    function renderExamples(samples) {
+      const list = (samples || []).map(s => s.question).slice(0, 4).length
+        ? (samples || []).map(s => s.question).slice(0, 4)
+        : ["What is machine learning?","What is the termination notice period in the service agreement?","How long does the NDA term remain in effect?","What does natural language processing do?"];
+      el.exampleList.innerHTML = list.map(q => `<div class="es-chip">${escHtml(q)}</div>`).join("");
+      [...el.exampleList.querySelectorAll(".es-chip")].forEach(chip =>
+        chip.addEventListener("click", () => { el.queryInput.value = chip.textContent; autoResize(); el.queryInput.focus(); switchPanel("query"); }));
+    }
+    async function loadSamples() {
+      try {
+        const res = await fetch("/samples"); if (!res.ok) throw new Error();
+        const data = await res.json(); renderExamples(data.samples || []);
+      } catch (_) { renderExamples([]); }
+    }
+
+    /* ═══════════════════════════════
+       EVENT WIRING
+    ═══════════════════════════════ */
+    el.navItems.forEach(n => n.addEventListener("click", () => switchPanel(n.dataset.panel)));
+    el.queryInput.addEventListener("input", autoResize);
+    el.queryInput.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendQuery(); } });
+    el.askBtn.addEventListener("click", sendQuery);
+    el.clearBtn.addEventListener("click", resetChat);
+    el.newChatBtn.addEventListener("click", () => { resetChat(); switchPanel("query"); });
+
+    el.uploadZone.addEventListener("click", () => el.fileInput.click());
+    el.uploadZone.addEventListener("dragover", e => { e.preventDefault(); el.uploadZone.classList.add("drag-over"); });
+    el.uploadZone.addEventListener("dragleave", () => el.uploadZone.classList.remove("drag-over"));
+    el.uploadZone.addEventListener("drop", e => { e.preventDefault(); el.uploadZone.classList.remove("drag-over"); addToQueue([...e.dataTransfer.files]); });
+    el.fileInput.addEventListener("change", () => { addToQueue([...el.fileInput.files]); el.fileInput.value = ""; });
+    el.fileQueue.addEventListener("click", e => { const idx = e.target.getAttribute("data-remove"); if (idx == null) return; fileQueue.splice(Number(idx), 1); renderQueue(); });
+
+    el.uploadBtn.addEventListener("click", ingestFiles);
+    el.clearQueueBtn.addEventListener("click", () => { fileQueue = []; renderQueue(); });
+    el.ingestFolderBtn.addEventListener("click", ingestFolder);
+    el.refreshBtn.addEventListener("click", async () => { await loadStats(); await checkHealth(); showToast("Stats refreshed", "success"); });
+    el.confirmCheck.addEventListener("change", () => { el.clearIndexBtn.disabled = !el.confirmCheck.checked; });
+    el.clearIndexBtn.addEventListener("click", openClearModal);
+    el.modalCancel.addEventListener("click", closeClearModal);
+    el.modalConfirm.addEventListener("click", clearStore);
+    el.clearModal.addEventListener("click", e => { if (e.target === el.clearModal) closeClearModal(); });
+
+    /* ═══════════════════════════════
+       INIT
+    ═══════════════════════════════ */
+    autoResize();
+    checkHealth();
+    loadSamples();
+    loadStats();
+    createSession();
+  </script>
+</body>
+</html>
